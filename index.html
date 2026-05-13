@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>용어집 도구</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<style>
+/* Notion-inspired design system
+   Color tokens follow Notion's palette: warm neutrals, minimal accents, subtle borders */
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f7f6f3;
+  --bg-hover: rgba(55, 53, 47, 0.06);
+  --bg-hover-strong: rgba(55, 53, 47, 0.08);
+  --text: #37352f;
+  --text-secondary: rgba(55, 53, 47, 0.65);
+  --text-tertiary: rgba(55, 53, 47, 0.45);
+  --border: rgba(55, 53, 47, 0.09);
+  --border-strong: rgba(55, 53, 47, 0.16);
+  --accent: #2383e2;
+  --accent-bg: rgba(35, 131, 226, 0.08);
+  --danger: #eb5757;
+  --danger-bg: rgba(235, 87, 87, 0.08);
+  --success: #0f7b6c;
+  --success-bg: rgba(15, 123, 108, 0.08);
+  --warning-bg: rgba(217, 115, 13, 0.08);
+  --warning-text: #d9730d;
+  --highlight: #fdecc8;
+  --highlight-strong: #fae0a8;
+  --radius: 3px;
+  --radius-lg: 6px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+header {
+  background: var(--bg);
+  color: var(--text);
+  padding: 16px 32px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+header h1 span { color: var(--text-tertiary); font-weight: 400; }
+header .stats { font-size: 13px; color: var(--text-secondary); }
+header .stats span { color: var(--text); font-weight: 600; }
+
+nav {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  display: flex;
+  gap: 2px;
+}
+nav button {
+  background: none;
+  border: none;
+  padding: 10px 12px;
+  margin-bottom: -1px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  font-family: inherit;
+  border-radius: var(--radius) var(--radius) 0 0;
+  transition: background 60ms ease, color 60ms ease;
+}
+nav button:hover { background: var(--bg-hover); color: var(--text); }
+nav button.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+
+main { padding: 32px; max-width: 1100px; margin: 0 auto; }
+.tab { display: none; }
+.tab.active { display: block; }
+
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+
+input[type="text"], input[type="password"], input[type="number"], select, textarea {
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color 60ms ease, box-shadow 60ms ease;
+}
+input[type="text"]:focus, input[type="password"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+input[type="file"] { font-size: 13px; color: var(--text-secondary); }
+
+button.primary {
+  background: var(--text);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  transition: opacity 60ms ease;
+}
+button.primary:hover { opacity: 0.88; }
+
+button.secondary {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  transition: background 60ms ease;
+}
+button.secondary:hover { background: var(--bg-hover); }
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--border-strong);
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  transition: background 60ms ease;
+}
+button.danger:hover { background: var(--danger-bg); }
+
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Tables */
+table {
+  width: 100%;
+  background: var(--bg);
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+th {
+  background: var(--bg-subtle);
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--bg-hover); }
+td .context { color: var(--text-tertiary); font-size: 13px; margin-top: 4px; }
+.project-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  margin-right: 4px;
+  border: 1px solid;
+  font-weight: 500;
+}
+/* Notion-style tag color palette */
+.project-tag.color-gray   { background: #ebeced; color: #5a5a5a; border-color: #d8d8d8; }
+.project-tag.color-brown  { background: #e9e5e3; color: #64473a; border-color: #d3c9c0; }
+.project-tag.color-orange { background: #faebdd; color: #d9730d; border-color: #f0d0a3; }
+.project-tag.color-yellow { background: #fbf3db; color: #b88300; border-color: #ecd994; }
+.project-tag.color-green  { background: #ddedea; color: #0f7b6c; border-color: #bedad3; }
+.project-tag.color-blue   { background: #ddebf1; color: #0b6e99; border-color: #bcd4e0; }
+.project-tag.color-purple { background: #eae4f2; color: #6940a5; border-color: #d4c5e3; }
+.project-tag.color-pink   { background: #f4dfeb; color: #ad1a72; border-color: #e8c5d8; }
+.project-tag.color-red    { background: #ffe2dd; color: #e03e3e; border-color: #f4c4be; }
+
+/* Color swatch (clickable in project settings) */
+.color-swatch {
+  display: inline-block;
+  width: 18px; height: 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  border: 1px solid;
+  vertical-align: middle;
+  transition: transform 80ms ease;
+}
+.color-swatch:hover { transform: scale(1.1); }
+.color-swatch.color-gray   { background: #ebeced; border-color: #d8d8d8; }
+.color-swatch.color-brown  { background: #e9e5e3; border-color: #d3c9c0; }
+.color-swatch.color-orange { background: #faebdd; border-color: #f0d0a3; }
+.color-swatch.color-yellow { background: #fbf3db; border-color: #ecd994; }
+.color-swatch.color-green  { background: #ddedea; border-color: #bedad3; }
+.color-swatch.color-blue   { background: #ddebf1; border-color: #bcd4e0; }
+.color-swatch.color-purple { background: #eae4f2; border-color: #d4c5e3; }
+.color-swatch.color-pink   { background: #f4dfeb; border-color: #e8c5d8; }
+.color-swatch.color-red    { background: #ffe2dd; border-color: #f4c4be; }
+
+/* Cards */
+.card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+.card h2 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); letter-spacing: -0.005em; }
+.card p.help { color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; line-height: 1.55; }
+.card p.help a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-bg); }
+.card p.help a:hover { border-bottom-color: var(--accent); }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
+.field input, .field select, .field textarea { width: 100%; }
+.field textarea { resize: vertical; font-family: inherit; }
+
+/* Modals */
+.modal-bg {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(15, 15, 15, 0.4);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-bg.active { display: flex; }
+.modal {
+  background: var(--bg);
+  padding: 24px 28px;
+  border-radius: var(--radius-lg);
+  width: 480px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(15, 15, 15, 0.15), 0 2px 4px rgba(15, 15, 15, 0.08);
+}
+.modal h2 { margin-bottom: 18px; font-size: 16px; font-weight: 600; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+/* Highlight markers */
+mark.term-hl {
+  background: var(--highlight);
+  padding: 1px 4px;
+  border-radius: var(--radius);
+  cursor: help;
+  font-weight: 500;
+}
+mark.term-hl:hover { background: var(--highlight-strong); }
+mark.term-hl sub { font-size: 11px !important; color: var(--warning-text) !important; font-weight: 400; }
+
+.highlight-row {
+  background: var(--bg);
+  padding: 10px 14px;
+  margin-bottom: 1px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 12px;
+  transition: background 60ms ease;
+}
+.highlight-row:hover { background: var(--bg-hover); }
+.highlight-row .row-num { color: var(--text-tertiary); font-size: 12px; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.highlight-row .row-text { line-height: 1.6; }
+
+.terms-found {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.terms-found h3 { font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; }
+.terms-found .term-chip {
+  display: inline-block;
+  background: var(--bg);
+  padding: 3px 10px;
+  border-radius: var(--radius);
+  margin: 2px 4px 2px 0;
+  font-size: 13px;
+  border: 1px solid var(--border);
+}
+
+/* Candidates */
+.candidate-list {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.candidate-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 30px 1fr 1fr 2fr;
+  gap: 12px;
+  align-items: start;
+  transition: background 60ms ease;
+}
+.candidate-item:hover { background: var(--bg-hover); }
+.candidate-item:last-child { border-bottom: none; }
+.candidate-item input[type="checkbox"] { margin-top: 6px; accent-color: var(--text); }
+.candidate-item .ko-en input { width: 100%; padding: 4px 8px; font-size: 13px; }
+.candidate-item .reason { color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.empty-state .icon { font-size: 32px; margin-bottom: 12px; opacity: 0.6; }
+
+/* Status messages */
+.status-msg {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  font-size: 13px;
+  border: 1px solid;
+  line-height: 1.5;
+}
+.status-msg.info { background: var(--accent-bg); color: var(--accent); border-color: rgba(35, 131, 226, 0.2); }
+.status-msg.success { background: var(--success-bg); color: var(--success); border-color: rgba(15, 123, 108, 0.2); }
+.status-msg.error { background: var(--danger-bg); color: var(--danger); border-color: rgba(235, 87, 87, 0.2); }
+.status-msg.loading { background: var(--warning-bg); color: var(--warning-text); border-color: rgba(217, 115, 13, 0.2); }
+
+/* API key status badge */
+.api-key-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  margin-left: 8px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid;
+}
+.api-key-status.set { background: var(--success-bg); color: var(--success); border-color: rgba(15, 123, 108, 0.2); }
+.api-key-status.not-set { background: var(--bg-subtle); color: var(--text-tertiary); border-color: var(--border); }
+
+/* Scrollbar (subtle, Notion-style) */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(55, 53, 47, 0.18); border-radius: 6px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-thumb:hover { background: rgba(55, 53, 47, 0.32); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>용어집 도구 <span style="font-size:12px;opacity:0.6;font-weight:400;">한↔영 게임 번역</span></h1>
+  <div class="stats"><span id="stat-terms">0</span> 용어 · <span id="stat-projects">0</span> 프로젝트</div>
+</header>
+
+<nav>
+  <button data-tab="glossary" class="active">📚 용어집</button>
+  <button data-tab="highlight">🔍 하이라이트 보기</button>
+  <button data-tab="extract">✨ AI 후보 추출</button>
+  <button data-tab="settings">⚙️ 설정</button>
+</nav>
+
+<main>
+
+<!-- 용어집 탭 -->
+<section id="tab-glossary" class="tab active">
+  <div class="toolbar">
+    <input type="text" id="search-input" placeholder="한국어/영어 검색..." style="flex:1;min-width:200px;">
+    <select id="project-filter"><option value="">전체 프로젝트</option></select>
+    <button class="primary" onclick="openTermModal()">+ 새 용어</button>
+  </div>
+  <div id="terms-table-wrap"></div>
+</section>
+
+<!-- 하이라이트 탭 -->
+<section id="tab-highlight" class="tab">
+  <div class="card">
+    <h2>파일 업로드 → 등록된 용어 하이라이트</h2>
+    <p class="help">파일을 업로드하면 한국어 문자열을 추출해서 등록된 용어를 자동으로 하이라이트하고 영어 번역을 보여줍니다.<br>
+      지원 형식: 엑셀(.xlsx, .xls), CSV, TSV, Word(.docx), JSON, XML, TXT, MD, HTML, PO, properties, strings, resx</p>
+    <div class="toolbar">
+      <input type="file" id="highlight-file" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.docx,.json,.xml,.txt,.md,.markdown,.html,.htm,.po,.pot,.properties,.strings,.resx">
+      <button class="secondary" onclick="clearHighlight()">🗑 초기화</button>
+    </div>
+    <div id="highlight-summary"></div>
+    <div id="highlight-sheet-picker" style="display:none;">
+      <div class="field">
+        <label>시트 선택</label>
+        <select id="highlight-sheet"></select>
+      </div>
+      <div class="field">
+        <label>한국어 컬럼 선택</label>
+        <select id="highlight-column"></select>
+      </div>
+      <button class="primary" onclick="runHighlight()">하이라이트 보기</button>
+    </div>
+  </div>
+  <div id="highlight-result"></div>
+</section>
+
+<!-- AI 후보 추출 탭 -->
+<section id="tab-extract" class="tab">
+  <div class="card">
+    <h2>한영 작업 파일 → AI가 용어 후보 추출</h2>
+    <p class="help">한국어 원문과 영어 번역이 같이 있는 파일을 업로드하면 Claude AI가 용어 후보를 추출합니다. (Claude API 키 필요)<br>
+      <strong>표 형식</strong>(엑셀/CSV/TSV)은 컬럼을 직접 선택하고, <strong>그 외 형식</strong>(JSON/XML/TXT/PO 등)은 AI가 한/영 쌍을 자동으로 찾습니다.</p>
+    <div class="toolbar">
+      <input type="file" id="extract-file" accept=".xlsx,.xls,.xlsm,.csv,.tsv,.docx,.json,.xml,.txt,.md,.markdown,.html,.htm,.po,.pot,.properties,.strings,.resx">
+      <button class="secondary" onclick="clearExtract()">🗑 초기화</button>
+    </div>
+    <div id="extract-summary"></div>
+    <div id="extract-sheet-picker" style="display:none;">
+      <div class="field">
+        <label>시트 선택</label>
+        <select id="extract-sheet"></select>
+      </div>
+      <div class="field" style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <label>한국어 컬럼</label>
+          <select id="extract-ko-col"></select>
+        </div>
+        <div style="flex:1;">
+          <label>영어 컬럼</label>
+          <select id="extract-en-col"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>프로젝트 태그 (선택)</label>
+        <select id="extract-project"><option value="">없음</option></select>
+      </div>
+      <div class="field">
+        <label>최대 분석 행 수</label>
+        <input type="number" id="extract-max-rows" value="100" min="10" max="500">
+      </div>
+      <button class="primary" onclick="runExtraction()">AI 분석 시작</button>
+    </div>
+    <div id="extract-freeform-picker" style="display:none;">
+      <div class="field">
+        <label>프로젝트 태그 (선택)</label>
+        <select id="extract-freeform-project"><option value="">없음</option></select>
+      </div>
+      <div class="field">
+        <label>최대 분석 크기 (글자 수)</label>
+        <input type="number" id="extract-freeform-max" value="30000" min="1000" max="100000">
+        <p style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">파일이 더 크면 앞부분만 분석됩니다. 비용 관리용.</p>
+      </div>
+      <button class="primary" onclick="runExtractionFreeform()">AI 분석 시작</button>
+    </div>
+  </div>
+  <div id="extract-result"></div>
+</section>
+
+<!-- 설정 탭 -->
+<section id="tab-settings" class="tab">
+  <div class="card">
+    <h2>Claude API 키 <span id="api-key-badge" class="api-key-status not-set">미설정</span></h2>
+    <p class="help">AI 후보 추출 기능을 사용하려면 Anthropic Claude API 키가 필요합니다. <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>에서 발급받을 수 있어요. 키는 본 브라우저에만 저장되며 외부로 전송되지 않습니다 (Anthropic 서버 제외).</p>
+    <div class="field">
+      <label>API 키</label>
+      <div style="display:flex;gap:6px;">
+        <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;">
+        <button class="secondary" type="button" onclick="toggleApiKeyVisibility()" id="api-key-toggle">👁 보기</button>
+      </div>
+      <p style="font-size:12px;color:var(--text-tertiary);margin-top:4px;">정상 키는 <code>sk-ant-api03-</code>으로 시작하고 약 108자입니다. 보기 버튼으로 정확히 입력됐는지 확인하세요.</p>
+    </div>
+    <div class="field">
+      <label>사용 모델</label>
+      <select id="model-select">
+        <option value="claude-opus-4-7">Claude Opus 4.7 (정확도 최고)</option>
+        <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (균형)</option>
+        <option value="claude-haiku-4-5">Claude Haiku 4.5 (빠르고 저렴)</option>
+      </select>
+    </div>
+    <button class="primary" onclick="saveApiKey()">저장</button>
+  </div>
+
+  <div class="card">
+    <h2>프로젝트 관리</h2>
+    <p class="help">게임/프로젝트별로 용어를 분류할 수 있습니다.</p>
+    <div id="projects-list"></div>
+    <div class="toolbar" style="margin-top:12px;">
+      <input type="text" id="new-project-name" placeholder="새 프로젝트 이름">
+      <button class="primary" onclick="addProject()">+ 추가</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>데이터 백업 / 복원</h2>
+    <p class="help">용어집 데이터를 JSON 파일로 내보내거나 가져올 수 있습니다. 팀 공유나 다른 PC로 옮길 때 사용하세요.</p>
+    <div class="toolbar">
+      <button class="secondary" onclick="exportData()">📥 JSON으로 내보내기</button>
+      <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)">
+      <button class="secondary" onclick="document.getElementById('import-file').click()">📤 JSON 가져오기</button>
+      <button class="danger" onclick="resetAllData()">🗑️ 전체 데이터 초기화</button>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- 용어 추가/수정 모달 -->
+<div class="modal-bg" id="term-modal">
+  <div class="modal">
+    <h2 id="term-modal-title">새 용어 추가</h2>
+    <input type="hidden" id="term-edit-id">
+    <div class="field">
+      <label>한국어 *</label>
+      <input type="text" id="term-ko" placeholder="예: 길드">
+    </div>
+    <div class="field">
+      <label>영어 *</label>
+      <input type="text" id="term-en" placeholder="예: Guild">
+    </div>
+    <div class="field">
+      <label>예문 / 문맥 (선택)</label>
+      <textarea id="term-context" rows="2" placeholder="실제 사용 예시 문장"></textarea>
+    </div>
+    <div class="field">
+      <label>프로젝트 (복수 선택 가능)</label>
+      <div id="term-projects-checks"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeTermModal()">취소</button>
+      <button class="primary" onclick="saveTerm()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
