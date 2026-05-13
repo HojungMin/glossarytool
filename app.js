@@ -67,7 +67,7 @@ function loadData() {
   return {
     terms: [],
     projects: [],
-    settings: { apiKey: '', model: 'claude-opus-4-7' }
+    settings: { apiKey: '', model: 'claude-opus-4-7', sort: 'ko-asc' }
   };
 }
 
@@ -110,12 +110,24 @@ function renderGlossary() {
     return true;
   });
 
-  filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  const sort = (data.settings && data.settings.sort) || 'ko-asc';
+  const koCmp = (a, b) => (a.ko || '').localeCompare(b.ko || '', 'ko');
+  const enCmp = (a, b) => (a.en || '').localeCompare(b.en || '', 'en', { sensitivity: 'base' });
+  if (sort === 'ko-asc') {
+    filtered.sort((a, b) => koCmp(a, b) || enCmp(a, b));
+  } else if (sort === 'en-asc') {
+    filtered.sort((a, b) => enCmp(a, b) || koCmp(a, b));
+  } else if (sort === 'updated-desc') {
+    filtered.sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
+  } else {
+    // created-desc (기본 fallback)
+    filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }
 
   const wrap = document.getElementById('terms-table-wrap');
   if (filtered.length === 0) {
     wrap.innerHTML = `<div class="empty-state"><div class="icon">📭</div>
-      <div>${data.terms.length === 0 ? '아직 등록된 용어가 없어요. "+ 새 용어" 또는 "AI 후보 추출"로 시작하세요.' : '검색 결과가 없어요.'}</div></div>`;
+      <div>${data.terms.length === 0 ? '아직 등록된 용어가 없어요. "+ 새 용어" / "📥 일괄 가져오기" / "✨ AI 후보 추출"로 시작하세요.' : '검색 결과가 없어요.'}</div></div>`;
     return;
   }
 
@@ -146,6 +158,12 @@ function escapeHtml(s) {
 
 document.getElementById('search-input').addEventListener('input', renderGlossary);
 document.getElementById('project-filter').addEventListener('change', renderGlossary);
+document.getElementById('sort-select').addEventListener('change', e => {
+  if (!data.settings) data.settings = {};
+  data.settings.sort = e.target.value;
+  saveData();
+  renderGlossary();
+});
 
 // ============================================================
 // 용어 추가/수정 모달
@@ -250,6 +268,8 @@ function renderProjects() {
   document.getElementById('extract-project').innerHTML = optsExtract;
   const freeformSel = document.getElementById('extract-freeform-project');
   if (freeformSel) freeformSel.innerHTML = optsExtract;
+  const bulkSel = document.getElementById('bulk-project');
+  if (bulkSel) bulkSel.innerHTML = optsExtract;
 }
 
 function addProject() {
@@ -668,6 +688,130 @@ function highlightText(text, terms) {
 }
 
 // ============================================================
+// 일괄 가져오기 탭 (엑셀/CSV/TSV → 용어집에 직접 등록)
+// 한국어가 일치하는 기존 용어는 영어/예문을 덮어쓰고, 프로젝트 태그는 병합
+// ============================================================
+let bulkLoaded = null;
+
+document.getElementById('bulk-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const picker = document.getElementById('bulk-picker');
+  const summary = document.getElementById('bulk-summary');
+  picker.style.display = 'none';
+  summary.innerHTML = '';
+  document.getElementById('bulk-result').innerHTML = '';
+
+  try {
+    bulkLoaded = await loadFile(file);
+    if (!bulkLoaded.isTabular) {
+      summary.innerHTML = `<div class="status-msg error">일괄 가져오기는 엑셀/CSV/TSV만 지원합니다. 다른 형식이라면 "AI 후보 추출"을 이용하세요.</div>`;
+      return;
+    }
+    const sheetSel = document.getElementById('bulk-sheet');
+    sheetSel.innerHTML = bulkLoaded.workbook.SheetNames
+      .map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+    picker.style.display = 'block';
+    summary.innerHTML = `<div class="status-msg info">📊 ${formatLabel(bulkLoaded.format)} 파일 — 한국어/영어 컬럼을 선택한 뒤 "가져오기"를 누르세요.</div>`;
+    updateBulkColumns();
+  } catch (err) {
+    summary.innerHTML = `<div class="status-msg error">파일을 처리하지 못했어요: ${escapeHtml(err.message)}</div>`;
+  }
+});
+
+document.getElementById('bulk-sheet').addEventListener('change', updateBulkColumns);
+
+function clearBulk() {
+  document.getElementById('bulk-file').value = '';
+  document.getElementById('bulk-summary').innerHTML = '';
+  document.getElementById('bulk-picker').style.display = 'none';
+  document.getElementById('bulk-result').innerHTML = '';
+  bulkLoaded = null;
+}
+
+function updateBulkColumns() {
+  if (!bulkLoaded || !bulkLoaded.isTabular) return;
+  const sheetName = document.getElementById('bulk-sheet').value;
+  const ws = bulkLoaded.workbook.Sheets[sheetName];
+  const rows = sheetToRows(ws);
+  const cols = getColumnLetters(rows);
+  const firstRow = rows[0] || [];
+  const options = cols.map(c => {
+    const sample = String(firstRow[c.index] || '').slice(0, 20);
+    return `<option value="${c.index}">${c.label}열 ${sample ? `(${escapeHtml(sample)})` : ''}</option>`;
+  }).join('');
+  document.getElementById('bulk-ko-col').innerHTML = options;
+  document.getElementById('bulk-en-col').innerHTML = options;
+  document.getElementById('bulk-context-col').innerHTML = '<option value="">없음</option>' + options;
+  if (cols.length > 1) document.getElementById('bulk-en-col').value = '1';
+}
+
+function runBulkImport() {
+  if (!bulkLoaded || !bulkLoaded.isTabular) return;
+  const sheetName = document.getElementById('bulk-sheet').value;
+  const koIdx = parseInt(document.getElementById('bulk-ko-col').value);
+  const enIdx = parseInt(document.getElementById('bulk-en-col').value);
+  const ctxRaw = document.getElementById('bulk-context-col').value;
+  const ctxIdx = ctxRaw === '' ? -1 : parseInt(ctxRaw);
+  const projectId = document.getElementById('bulk-project').value;
+  const skipHeader = document.getElementById('bulk-skip-header').checked;
+
+  if (koIdx === enIdx) {
+    document.getElementById('bulk-result').innerHTML =
+      '<div class="status-msg error">한국어와 영어 컬럼이 같습니다. 다른 컬럼을 선택해 주세요.</div>';
+    return;
+  }
+
+  const ws = bulkLoaded.workbook.Sheets[sheetName];
+  const rows = sheetToRows(ws);
+  const startIdx = skipHeader ? 1 : 0;
+
+  // 한국어 기준 인덱스 (덮어쓰기 매칭용)
+  const koToTerm = new Map();
+  for (const t of data.terms) koToTerm.set(t.ko, t);
+
+  let added = 0, overwritten = 0, skipped = 0;
+  const now = new Date().toISOString();
+
+  for (let i = startIdx; i < rows.length; i++) {
+    const ko = String(rows[i][koIdx] || '').trim();
+    const en = String(rows[i][enIdx] || '').trim();
+    if (!ko || !en) { skipped++; continue; }
+    const context = ctxIdx >= 0 ? String(rows[i][ctxIdx] || '').trim() : '';
+
+    const existing = koToTerm.get(ko);
+    if (existing) {
+      existing.en = en;
+      if (context) existing.context = context;
+      if (projectId && !(existing.projects || []).includes(projectId)) {
+        existing.projects = [...(existing.projects || []), projectId];
+      }
+      existing.updatedAt = now;
+      overwritten++;
+    } else {
+      const newTerm = {
+        id: uid(), ko, en, context,
+        projects: projectId ? [projectId] : [],
+        createdAt: now
+      };
+      data.terms.push(newTerm);
+      koToTerm.set(ko, newTerm);
+      added++;
+    }
+  }
+
+  saveData();
+  renderGlossary();
+
+  const resultDiv = document.getElementById('bulk-result');
+  resultDiv.innerHTML = `<div class="status-msg success">
+    ✓ 가져오기 완료!<br>
+    • 새로 추가: <strong>${added}개</strong><br>
+    • 덮어쓰기: <strong>${overwritten}개</strong>${skipped ? `<br>• 빈 행 건너뜀: ${skipped}개` : ''}
+  </div>`;
+}
+
+// ============================================================
 // AI 후보 추출 탭 (표 형식 + freeform 모드)
 // ============================================================
 let extractLoaded = null;
@@ -1035,6 +1179,8 @@ function resetAllData() {
 // ============================================================
 function init() {
   loadSettingsUI();
+  const sortSel = document.getElementById('sort-select');
+  if (sortSel) sortSel.value = (data.settings && data.settings.sort) || 'ko-asc';
   renderProjects();
   renderGlossary();
   refreshStats();

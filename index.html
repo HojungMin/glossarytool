@@ -377,6 +377,7 @@ mark.term-hl sub { font-size: 11px !important; color: var(--warning-text) !impor
 <nav>
   <button data-tab="glossary" class="active">📚 용어집</button>
   <button data-tab="highlight">🔍 하이라이트 보기</button>
+  <button data-tab="bulkimport">📥 일괄 가져오기</button>
   <button data-tab="extract">✨ AI 후보 추출</button>
   <button data-tab="settings">⚙️ 설정</button>
 </nav>
@@ -388,6 +389,12 @@ mark.term-hl sub { font-size: 11px !important; color: var(--warning-text) !impor
   <div class="toolbar">
     <input type="text" id="search-input" placeholder="한국어/영어 검색..." style="flex:1;min-width:200px;">
     <select id="project-filter"><option value="">전체 프로젝트</option></select>
+    <select id="sort-select" title="정렬 순서">
+      <option value="ko-asc">가나다순</option>
+      <option value="en-asc">ABC순 (영어)</option>
+      <option value="created-desc">최근 추가순</option>
+      <option value="updated-desc">최근 수정순</option>
+    </select>
     <button class="primary" onclick="openTermModal()">+ 새 용어</button>
   </div>
   <div id="terms-table-wrap"></div>
@@ -417,6 +424,54 @@ mark.term-hl sub { font-size: 11px !important; color: var(--warning-text) !impor
     </div>
   </div>
   <div id="highlight-result"></div>
+</section>
+
+<!-- 일괄 가져오기 탭 -->
+<section id="tab-bulkimport" class="tab">
+  <div class="card">
+    <h2>엑셀 → 용어집 일괄 가져오기</h2>
+    <p class="help">기존 엑셀/CSV 용어집을 통째로 등록합니다. 한국어가 같은 용어가 이미 있으면 영어/예문을 <strong>덮어씁니다</strong> (프로젝트 태그는 병합).<br>
+      지원 형식: 엑셀(.xlsx, .xls), CSV, TSV</p>
+    <div class="toolbar">
+      <input type="file" id="bulk-file" accept=".xlsx,.xls,.xlsm,.csv,.tsv">
+      <button class="secondary" onclick="clearBulk()">🗑 초기화</button>
+    </div>
+    <div id="bulk-summary"></div>
+    <div id="bulk-picker" style="display:none;">
+      <div class="field">
+        <label>시트 선택</label>
+        <select id="bulk-sheet"></select>
+      </div>
+      <div class="field" style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <label>한국어 컬럼 *</label>
+          <select id="bulk-ko-col"></select>
+        </div>
+        <div style="flex:1;">
+          <label>영어 컬럼 *</label>
+          <select id="bulk-en-col"></select>
+        </div>
+      </div>
+      <div class="field" style="display:flex;gap:12px;">
+        <div style="flex:1;">
+          <label>예문 / 문맥 컬럼 (선택)</label>
+          <select id="bulk-context-col"><option value="">없음</option></select>
+        </div>
+        <div style="flex:1;">
+          <label>프로젝트 태그 (선택)</label>
+          <select id="bulk-project"><option value="">없음</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-weight:normal;text-transform:none;font-size:13px;color:var(--text);cursor:pointer;letter-spacing:0;">
+          <input type="checkbox" id="bulk-skip-header" checked>
+          첫 행은 헤더로 처리 (제외)
+        </label>
+      </div>
+      <button class="primary" onclick="runBulkImport()">가져오기</button>
+    </div>
+  </div>
+  <div id="bulk-result"></div>
 </section>
 
 <!-- AI 후보 추출 탭 -->
