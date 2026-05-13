@@ -131,16 +131,17 @@ function renderGlossary() {
     return;
   }
 
-  let html = '<table><thead><tr><th style="width:25%;">한국어</th><th style="width:25%;">영어</th><th>예문 / 프로젝트</th><th style="width:120px;">작업</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th style="width:140px;">프로젝트</th><th style="width:22%;">한국어</th><th style="width:22%;">영어</th><th>예문</th><th style="width:120px;">작업</th></tr></thead><tbody>';
   for (const t of filtered) {
     const projectTags = (t.projects || []).map(pid => {
       const p = data.projects.find(x => x.id === pid);
       return p ? `<span class="project-tag color-${p.color || 'gray'}">${escapeHtml(p.name)}</span>` : '';
     }).join('');
     html += `<tr>
+      <td>${projectTags}</td>
       <td><strong>${escapeHtml(t.ko)}</strong></td>
       <td>${escapeHtml(t.en)}</td>
-      <td>${projectTags}${t.context ? `<div class="context">"${escapeHtml(t.context)}"</div>` : ''}</td>
+      <td>${t.context ? `<div class="context">"${escapeHtml(t.context)}"</div>` : ''}</td>
       <td>
         <button class="secondary" style="padding:4px 10px;font-size:12px;" onclick="openTermModal('${t.id}')">수정</button>
         <button class="danger" onclick="deleteTerm('${t.id}')">삭제</button>
