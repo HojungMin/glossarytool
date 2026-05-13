@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>용어집 도구</title>
+<title>Glossary Tool</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <style>
@@ -52,8 +52,13 @@ header {
   justify-content: space-between;
   border-bottom: 1px solid var(--border);
 }
-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
-header h1 span { color: var(--text-tertiary); font-weight: 400; }
+header h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+header h1 .title-main {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 header .stats { font-size: 13px; color: var(--text-secondary); }
 header .stats span { color: var(--text); font-weight: 600; }
 
@@ -370,7 +375,7 @@ mark.term-hl sub { font-size: 11px !important; color: var(--warning-text) !impor
 <body>
 
 <header>
-  <h1>용어집 도구 <span style="font-size:12px;opacity:0.6;font-weight:400;">한↔영 게임 번역</span></h1>
+  <h1><span class="title-main">Glossary Tool</span></h1>
   <div class="stats"><span id="stat-terms">0</span> 용어 · <span id="stat-projects">0</span> 프로젝트</div>
 </header>
 
